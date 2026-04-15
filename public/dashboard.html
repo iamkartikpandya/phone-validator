@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PhoneVerify — Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Navbar ──────────────────────────────────────────── -->
+<nav class="navbar">
+  <a href="/dashboard.html" class="brand">
+    <div class="brand-icon">
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round"
+          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+      </svg>
+    </div>
+    PhoneVerify
+  </a>
+  <div class="nav-right">
+    <div class="user-chip">
+      <div class="avatar" id="navAvatar">?</div>
+      <span id="navName"></span>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="logoutBtn">Logout</button>
+  </div>
+</nav>
+
+<!-- ── Main ────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- Step 1 — API Key -->
+  <div class="card" id="cardKey">
+    <div class="card-head">
+      <div class="card-title-group">
+        <div class="step-num" id="step1Badge">1</div>
+        <div>
+          <h2>NumlookupAPI Key</h2>
+          <p>Your API key is stored locally and never shared</p>
+        </div>
+      </div>
+      <a href="https://app.numlookupapi.com/" target="_blank" rel="noopener"
+         class="btn btn-ghost btn-sm">Get API Key ↗</a>
+    </div>
+    <div class="card-body">
+      <div class="key-row mb-2">
+        <input type="password" id="apiKeyInput" placeholder="Enter your NumlookupAPI key…">
+        <button class="btn btn-ghost btn-sm" id="toggleKeyBtn" type="button">Show</button>
+        <button class="btn btn-primary" id="saveKeyBtn" type="button">Save Key</button>
+      </div>
+      <div class="alert alert-error"   id="keyErr"></div>
+      <div class="alert alert-success" id="keyOk"></div>
+      <p class="text-xs muted" id="keyStatus"></p>
+    </div>
+  </div>
+
+  <!-- Step 2 — Upload CSV -->
+  <div class="card" id="cardUpload">
+    <div class="card-head">
+      <div class="card-title-group">
+        <div class="step-num" id="step2Badge">2</div>
+        <div>
+          <h2>Upload CSV File</h2>
+          <p>Drag & drop or click to select — up to 20 MB</p>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm hidden" id="reUploadBtn">Change File</button>
+    </div>
+    <div class="card-body">
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept=".csv">
+        <div class="drop-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414A1 1 0 0119 9.414V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <h3 id="dropLabel">Click or drag a CSV file here</h3>
+        <p id="dropSub">Supports standard comma-separated files exported from Excel, Google Sheets, etc.</p>
+      </div>
+      <div class="alert alert-error hidden" id="uploadErr"></div>
+    </div>
+  </div>
+
+  <!-- Step 3 — Configure & Process -->
+  <div class="card hidden" id="cardProcess">
+    <div class="card-head">
+      <div class="card-title-group">
+        <div class="step-num" id="step3Badge">3</div>
+        <div>
+          <h2>Select Phone Column & Process</h2>
+          <p id="rowCountLabel"></p>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <!-- Column picker -->
+      <div class="form-group mb-2">
+        <label for="colSelect">Which column contains the phone numbers?</label>
+        <select id="colSelect"></select>
+      </div>
+
+      <!-- CSV preview -->
+      <p class="text-xs muted mb-2 fw-500">Preview (first 5 rows)</p>
+      <div class="table-wrap mb-2" id="previewWrap"></div>
+
+      <!-- Speed selector -->
+      <div class="speed-box mb-2">
+        <p class="text-xs fw-500 muted" style="margin-bottom:.625rem;">
+          Processing Speed
+          <span style="font-weight:400"> — match this to your NumlookupAPI plan</span>
+        </p>
+        <div class="speed-presets" id="speedPresets">
+          <button class="speed-btn" data-rps="1">
+            <span class="speed-rps">1<small>/s</small></span>
+            <span class="speed-label">Free</span>
+          </button>
+          <button class="speed-btn active" data-rps="8">
+            <span class="speed-rps">8<small>/s</small></span>
+            <span class="speed-label">Basic</span>
+          </button>
+          <button class="speed-btn" data-rps="20">
+            <span class="speed-rps">20<small>/s</small></span>
+            <span class="speed-label">Pro</span>
+          </button>
+          <button class="speed-btn" data-rps="50">
+            <span class="speed-rps">50<small>/s</small></span>
+            <span class="speed-label">Business</span>
+          </button>
+          <button class="speed-btn" data-rps="100">
+            <span class="speed-rps">100<small>/s</small></span>
+            <span class="speed-label">Enterprise</span>
+          </button>
+          <button class="speed-btn" data-rps="custom">
+            <span class="speed-rps" id="customRpsDisplay">—</span>
+            <span class="speed-label">Custom</span>
+          </button>
+        </div>
+        <div id="customRpsRow" class="hidden" style="margin-top:.75rem;display:flex;align-items:center;gap:.5rem;">
+          <input type="number" id="customRpsInput" min="1" max="120" placeholder="e.g. 30"
+                 style="width:110px;padding:.375rem .625rem;font-size:.875rem;">
+          <span class="text-xs muted">requests / second  (max 120)</span>
+        </div>
+        <p class="text-xs muted mt-1" id="speedHint" style="margin-top:.5rem;"></p>
+      </div>
+
+      <div class="alert alert-error hidden" id="processErr"></div>
+
+      <button class="btn btn-primary btn-lg" id="processBtn" type="button">
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round"
+            d="M13 10V3L4 14h7v7l9-11h-7z"/>
+        </svg>
+        Start Validation
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 4 — Progress -->
+  <div class="card hidden" id="cardProgress">
+    <div class="card-head">
+      <div class="card-title-group">
+        <div class="step-num" id="step4Badge">4</div>
+        <div>
+          <h2>Validating Numbers…</h2>
+          <p id="progressLabel">Starting…</p>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill" style="width:0%"></div>
+      </div>
+      <div class="progress-labels">
+        <span id="progressPct">0%</span>
+        <span id="progressCount"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5 — Results -->
+  <div class="card hidden" id="cardResults">
+    <div class="card-head">
+      <div class="card-title-group">
+        <div class="step-num done" id="step5Badge">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+          </svg>
+        </div>
+        <div>
+          <h2>Validation Complete</h2>
+          <p id="resultSummary"></p>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="stats" id="statsGrid"></div>
+
+      <!-- Result preview table -->
+      <p class="text-xs muted mb-2 fw-500" id="resultPreviewLabel"></p>
+      <div class="table-wrap mb-2" id="resultPreviewWrap"></div>
+
+      <div class="flex gap-3 items-c">
+        <button class="btn btn-success btn-lg" id="downloadBtn" type="button">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          Download CSV
+        </button>
+        <button class="btn btn-ghost" id="newFileBtn" type="button">Process Another File</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Toast container -->
+<div id="toasts"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+const state = {
+  token:     localStorage.getItem('pv_token'),
+  user:      JSON.parse(localStorage.getItem('pv_user') || 'null'),
+  fileId:    null,
+  columns:   [],
+  preview:   [],
+  jobId:     null,
+  pollTimer: null,
+  rps:       8   // default
+};
+
+// ── Guard ──────────────────────────────────────────────────────────────────────
+if (!state.token) location.href = '/index.html';
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function toast(msg, type='') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span>${esc(msg)}</span>`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function api(method, url, body) {
+  const opts = {
+    method,
+    headers: {
+      'Authorization': `Bearer ${state.token}`,
+      ...(body ? { 'Content-Type': 'application/json' } : {})
+    },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  };
+  const res  = await fetch(url, opts);
+  const data = await res.json();
+  if (res.status === 401) { logout(); return; }
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+function setVisible(id, show) {
+  document.getElementById(id).classList.toggle('hidden', !show);
+}
+
+function showAlert(id, msg, show=true) {
+  const el = document.getElementById(id);
+  el.classList.toggle('hidden', !show);
+  if (show) el.textContent = msg;
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+async function init() {
+  // Navbar
+  const name = state.user?.name || 'User';
+  document.getElementById('navName').textContent   = name;
+  document.getElementById('navAvatar').textContent = name.charAt(0).toUpperCase();
+
+  // Load API key status
+  try {
+    const profile = await api('GET', '/api/user/profile');
+    if (profile.hasApiKey) {
+      document.getElementById('apiKeyInput').placeholder = profile.apiKeyMasked || '••••••••••••••••';
+      document.getElementById('keyStatus').textContent   = 'API key is saved. Enter a new one to update.';
+      markStepDone(1);
+    }
+  } catch {}
+}
+
+// ── Step 1 — API Key ───────────────────────────────────────────────────────────
+document.getElementById('toggleKeyBtn').addEventListener('click', () => {
+  const inp = document.getElementById('apiKeyInput');
+  const btn = document.getElementById('toggleKeyBtn');
+  if (inp.type === 'password') { inp.type = 'text';     btn.textContent = 'Hide'; }
+  else                         { inp.type = 'password'; btn.textContent = 'Show'; }
+});
+
+document.getElementById('saveKeyBtn').addEventListener('click', async () => {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) { showAlert('keyErr', 'Please enter an API key.'); document.getElementById('keyErr').classList.add('show'); return; }
+
+  document.getElementById('keyErr').classList.remove('show');
+  document.getElementById('keyOk').classList.remove('show');
+
+  const btn = document.getElementById('saveKeyBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await api('POST', '/api/user/apikey', { apiKey: key });
+    document.getElementById('keyOk').textContent = 'API key saved successfully!';
+    document.getElementById('keyOk').classList.add('show');
+    document.getElementById('apiKeyInput').value = '';
+    document.getElementById('apiKeyInput').type  = 'password';
+    document.getElementById('toggleKeyBtn').textContent = 'Show';
+    document.getElementById('keyStatus').textContent = 'API key is saved.';
+    markStepDone(1);
+    toast('API key saved', 'ok');
+  } catch (err) {
+    document.getElementById('keyErr').textContent = err.message;
+    document.getElementById('keyErr').classList.add('show');
+  }
+  btn.disabled = false; btn.textContent = 'Save Key';
+});
+
+// ── Step 2 — Upload ────────────────────────────────────────────────────────────
+const dropZone  = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+document.getElementById('reUploadBtn').addEventListener('click', () => {
+  // Reset to upload state
+  dropZone.classList.remove('loaded');
+  document.getElementById('dropLabel').textContent  = 'Click or drag a CSV file here';
+  document.getElementById('dropSub').textContent    = 'Supports standard comma-separated files exported from Excel, Google Sheets, etc.';
+  fileInput.value = '';
+  setVisible('reUploadBtn', false);
+  setVisible('cardProcess', false);
+  state.fileId  = null;
+  state.columns = [];
+  state.preview = [];
+  markStepPending(2);
+  markStepPending(3);
+});
+
+async function handleFile(file) {
+  if (!file.name.toLowerCase().endsWith('.csv')) {
+    showAlert('uploadErr', 'Only .csv files are supported.'); setVisible('uploadErr', true);
+    return;
+  }
+  setVisible('uploadErr', false);
+
+  // Show spinner in drop zone
+  document.getElementById('dropLabel').textContent = 'Uploading…';
+  dropZone.classList.add('drag-over');
+
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const res = await fetch('/api/upload', {
+      method:  'POST',
+      headers: { 'Authorization': `Bearer ${state.token}` },
+      body:    form
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    state.fileId  = data.fileId;
+    state.columns = data.columns;
+    state.preview = data.preview;
+
+    // Update drop zone
+    dropZone.classList.remove('drag-over');
+    dropZone.classList.add('loaded');
+    // Remove file input so it doesn't interfere with the loaded state
+    fileInput.style.display = 'none';
+    document.getElementById('dropLabel').textContent = `✓ ${file.name}`;
+    document.getElementById('dropSub').textContent   = `${data.totalRows.toLocaleString()} rows detected`;
+    setVisible('reUploadBtn', true);
+
+    markStepDone(2);
+
+    // Populate step 3
+    buildColumnSelect(data.columns, data.preview);
+    document.getElementById('rowCountLabel').textContent = `${data.totalRows.toLocaleString()} rows to process`;
+    setVisible('cardProcess', true);
+
+    toast(`File loaded — ${data.totalRows.toLocaleString()} rows`, 'ok');
+  } catch (err) {
+    dropZone.classList.remove('drag-over', 'loaded');
+    document.getElementById('dropLabel').textContent = 'Click or drag a CSV file here';
+    document.getElementById('dropSub').textContent   = 'Supports standard comma-separated files exported from Excel, Google Sheets, etc.';
+    showAlert('uploadErr', err.message); setVisible('uploadErr', true);
+    toast(err.message, 'err');
+  }
+}
+
+function buildColumnSelect(columns, preview) {
+  const sel = document.getElementById('colSelect');
+  sel.innerHTML = columns.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+
+  // Auto-detect phone column
+  const hint = columns.find(c => /phone|mobile|cell|tel|number/i.test(c));
+  if (hint) sel.value = hint;
+
+  renderPreview(preview, columns, sel.value);
+  sel.addEventListener('change', () => renderPreview(preview, columns, sel.value));
+}
+
+function renderPreview(rows, columns, highlight) {
+  const table = document.createElement('table');
+  table.innerHTML =
+    `<thead><tr>${columns.map(c =>
+      `<th style="${c===highlight ? 'background:#ede9fe;color:var(--primary)' : ''}">${esc(c)}</th>`
+    ).join('')}</tr></thead>` +
+    `<tbody>${rows.map(row =>
+      `<tr>${columns.map(c =>
+        `<td style="${c===highlight ? 'background:#f5f3ff;font-weight:500' : ''}">${esc(row[c] ?? '')}</td>`
+      ).join('')}</tr>`
+    ).join('')}</tbody>`;
+
+  const wrap = document.getElementById('previewWrap');
+  wrap.innerHTML = '';
+  wrap.appendChild(table);
+}
+
+// ── Speed selector ─────────────────────────────────────────────────────────────
+
+const SPEED_HINTS = {
+  1:       'Free plan — 1 lookup/sec, safest choice for free-tier keys.',
+  8:       'Basic plan — up to 8 lookups/sec. Good default for most paid plans.',
+  20:      'Pro plan — 20 lookups/sec with 3 concurrent workers.',
+  50:      'Business plan — 50 lookups/sec with 10 concurrent workers.',
+  100:     'Enterprise plan — 100 lookups/sec with 15 concurrent workers.',
+  custom:  'Enter your plan\'s exact rate limit above.',
+};
+
+function updateSpeedHint(rps) {
+  const hint = SPEED_HINTS[rps] || `Custom: ${rps} lookups/sec.`;
+  document.getElementById('speedHint').textContent = hint;
+}
+
+document.getElementById('speedPresets').addEventListener('click', e => {
+  const btn = e.target.closest('.speed-btn');
+  if (!btn) return;
+
+  document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const val = btn.dataset.rps;
+  const customRow = document.getElementById('customRpsRow');
+
+  if (val === 'custom') {
+    customRow.style.display = 'flex';
+    const custom = parseInt(document.getElementById('customRpsInput').value) || null;
+    state.rps = custom || 8;
+    document.getElementById('customRpsDisplay').textContent = custom ? `${custom}/s` : '—';
+    updateSpeedHint('custom');
+  } else {
+    customRow.style.display = 'none';
+    state.rps = parseInt(val);
+    updateSpeedHint(state.rps);
+  }
+});
+
+document.getElementById('customRpsInput').addEventListener('input', e => {
+  const v = Math.min(120, Math.max(1, parseInt(e.target.value) || 0));
+  state.rps = v || 8;
+  document.getElementById('customRpsDisplay').textContent = v ? `${v}/s` : '—';
+});
+
+// Init hint
+updateSpeedHint(8);
+
+// ── Step 3 — Process ───────────────────────────────────────────────────────────
+document.getElementById('processBtn').addEventListener('click', async () => {
+  const phoneColumn = document.getElementById('colSelect').value;
+  if (!phoneColumn) return;
+
+  showAlert('processErr', '', false);
+  const btn = document.getElementById('processBtn');
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spin"></span> Starting…`;
+
+  try {
+    const { jobId, total, rps, concurrency } = await api('POST', '/api/process', {
+      fileId: state.fileId,
+      phoneColumn,
+      rps: state.rps
+    });
+    state.jobId = jobId;
+
+    setVisible('cardProcess',  false);
+    setVisible('cardProgress', true);
+    document.getElementById('progressLabel').textContent =
+      `Processing ${total.toLocaleString()} numbers at ${rps}/s (${concurrency} worker${concurrency>1?'s':''})…`;
+
+    pollProgress(jobId, total);
+  } catch (err) {
+    showAlert('processErr', err.message, true);
+    document.getElementById('processErr').classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      Start Validation`;
+    toast(err.message, 'err');
+  }
+});
+
+// ── Step 4 — Poll progress ─────────────────────────────────────────────────────
+async function pollProgress(jobId, total) {
+  state.pollTimer = setInterval(async () => {
+    try {
+      const job = await api('GET', `/api/progress/${jobId}`);
+      if (!job) return;
+
+      const pct = job.progress || 0;
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressPct').textContent  = pct + '%';
+      document.getElementById('progressCount').textContent =
+        `${(job.processed + job.errors).toLocaleString()} / ${job.total.toLocaleString()}`;
+      const speedInfo = job.rps ? `  ·  ${job.rps}/s · ${job.concurrency}w` : '';
+      document.getElementById('progressLabel').textContent =
+        `Validated: ${job.processed.toLocaleString()} ✓   Errors: ${job.errors.toLocaleString()}${speedInfo}`;
+
+      if (job.status === 'done') {
+        clearInterval(state.pollTimer);
+        showResults(job);
+      } else if (job.status === 'error') {
+        clearInterval(state.pollTimer);
+        toast('Processing failed: ' + (job.errorMessage || 'Unknown error'), 'err');
+        setVisible('cardProgress', false);
+        setVisible('cardProcess',  true);
+        document.getElementById('processBtn').disabled = false;
+      }
+    } catch {}
+  }, 800);
+}
+
+// ── Step 5 — Results ───────────────────────────────────────────────────────────
+async function showResults(job) {
+  setVisible('cardProgress', false);
+  setVisible('cardResults',  true);
+  markStepDone(4);
+
+  const valid   = job.processed;
+  const total   = job.total;
+  const errors  = job.errors;
+
+  document.getElementById('resultSummary').textContent =
+    `${valid.toLocaleString()} numbers processed successfully`;
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat total">
+      <div class="stat-val">${total.toLocaleString()}</div>
+      <div class="stat-lbl">Total Rows</div>
+    </div>
+    <div class="stat ok">
+      <div class="stat-val">${valid.toLocaleString()}</div>
+      <div class="stat-lbl">Validated</div>
+    </div>
+    <div class="stat fail">
+      <div class="stat-val">${errors.toLocaleString()}</div>
+      <div class="stat-lbl">Errors / Skipped</div>
+    </div>`;
+
+  toast('Validation complete! Downloading…', 'ok');
+  // Auto-trigger download
+  setTimeout(() => triggerDownload(), 800);
+}
+
+function triggerDownload() {
+  const a = document.createElement('a');
+  a.href = `/api/download/${state.jobId}`;
+  a.setAttribute('data-auth', state.token);
+  // Use a hidden fetch to download with auth header
+  fetchAndDownload(`/api/download/${state.jobId}`);
+}
+
+async function fetchAndDownload(url) {
+  try {
+    const res  = await fetch(url, { headers: { 'Authorization': `Bearer ${state.token}` } });
+    if (!res.ok) { toast('Download failed', 'err'); return; }
+    const blob = await res.blob();
+    const link = document.createElement('a');
+    link.href     = URL.createObjectURL(blob);
+    link.download = 'phone_validation_results.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+  } catch {
+    toast('Download failed', 'err');
+  }
+}
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  fetchAndDownload(`/api/download/${state.jobId}`);
+});
+
+document.getElementById('newFileBtn').addEventListener('click', () => {
+  location.reload();
+});
+
+// ── Step badges ────────────────────────────────────────────────────────────────
+function markStepDone(n) {
+  const badge = document.getElementById(`step${n}Badge`);
+  if (!badge) return;
+  badge.classList.add('done');
+  badge.innerHTML = `<svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>`;
+}
+function markStepPending(n) {
+  const badge = document.getElementById(`step${n}Badge`);
+  if (!badge) return;
+  badge.classList.remove('done');
+  badge.textContent = n;
+}
+
+// ── Logout ─────────────────────────────────────────────────────────────────────
+function logout() {
+  localStorage.removeItem('pv_token');
+  localStorage.removeItem('pv_user');
+  location.href = '/index.html';
+}
+document.getElementById('logoutBtn').addEventListener('click', logout);
+
+// ── Boot ───────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

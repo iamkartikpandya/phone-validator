@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+!.env.local.example
+results/*.csv
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local runtime database with user records and encrypted API keys
+users.json
