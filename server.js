@@ -15,8 +15,10 @@ require('dotenv').config();
 const app = express();
 const PORT       = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
-const DB_FILE    = path.join(__dirname, 'users.json');
-const RESULTS_DIR = path.join(__dirname, 'results');
+const IS_VERCEL = !!process.env.VERCEL;
+const STORAGE_BASE = IS_VERCEL ? '/tmp' : __dirname;
+const DB_FILE    = path.join(STORAGE_BASE, 'users.json');
+const RESULTS_DIR = path.join(STORAGE_BASE, 'results');
 const USERDATA_ENC_KEY = process.env.USERDATA_ENC_KEY || '';
 
 if (!JWT_SECRET || !JWT_SECRET.trim()) {
@@ -423,6 +425,10 @@ async function runJob(jobId, records, phoneColumn, apiKey, rps = 8) {
   }
 }
 
-app.listen(PORT, () => {
-  console.log(`\n  PhoneVerify running → http://localhost:${PORT}\n`);
-});
+if (!IS_VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`\n  PhoneVerify running → http://localhost:${PORT}\n`);
+  });
+}
+
+module.exports = app;
