@@ -291,7 +291,10 @@ async function init() {
       document.getElementById('keyStatus').textContent   = 'API key is saved. Enter a new one to update.';
       markStepDone(1);
     }
-  } catch {}
+  } catch {
+    toast('Session expired or account unavailable. Please sign in again.', 'error');
+    logout();
+  }
 }
 
 // ── Step 1 — API Key ───────────────────────────────────────────────────────────

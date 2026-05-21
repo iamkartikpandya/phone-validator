@@ -8,6 +8,7 @@ const crypto  = require('crypto');
 const { parse }    = require('csv-parse/sync');
 const { stringify } = require('csv-stringify/sync');
 const axios   = require('axios');
+const userDb  = require('./db/users');
 
 require('dotenv').config({ path: path.join(__dirname, '.env.local') });
 require('dotenv').config();
@@ -17,7 +18,6 @@ const PORT       = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const IS_VERCEL = !!process.env.VERCEL;
 const STORAGE_BASE = IS_VERCEL ? '/tmp' : __dirname;
-const DB_FILE    = path.join(STORAGE_BASE, 'users.json');
 const RESULTS_DIR = path.join(STORAGE_BASE, 'results');
 const USERDATA_ENC_KEY = process.env.USERDATA_ENC_KEY || '';
 
@@ -34,7 +34,7 @@ const derivedDataKey = crypto.createHash('sha256')
 
 // Bootstrap storage
 if (!fs.existsSync(RESULTS_DIR)) fs.mkdirSync(RESULTS_DIR, { recursive: true });
-if (!fs.existsSync(DB_FILE))     fs.writeFileSync(DB_FILE, JSON.stringify({ users: [] }));
+userDb.bootstrapFileStorage();
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -47,10 +47,6 @@ const upload = multer({
 // ── Temp in-memory stores ──────────────────────────────────────────────────────
 const csvStore = {};  // fileId  → { records, uploadedAt }
 const jobs     = {};  // jobId   → { status, progress, total, processed, errors, outputId? }
-
-// ── DB helpers ─────────────────────────────────────────────────────────────────
-const readDB  = ()     => JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-const writeDB = (data) => fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), { mode: 0o600 });
 
 function encryptValue(plainText) {
   if (!plainText) return '';
@@ -83,7 +79,13 @@ function decryptValue(payload) {
   }
 }
 
-function secureAndMigrateDB(db) {
+function getDecryptedApiKey(user) {
+  return decryptValue(user?.apiKeyEnc || '');
+}
+
+function migrateFilePlaintextKeys() {
+  if (userDb.usePostgres()) return;
+  const db = userDb.readFileDB();
   let changed = false;
   db.users = (db.users || []).map(user => {
     const next = { ...user };
@@ -101,22 +103,19 @@ function secureAndMigrateDB(db) {
     }
     return next;
   });
-  return { db, changed };
+  if (changed) userDb.writeFileDB(db);
 }
 
-function getDecryptedApiKey(user) {
-  return decryptValue(user?.apiKeyEnc || '');
-}
+migrateFilePlaintextKeys();
+userDb.migrateFileUsers(encryptValue).catch(err => {
+  console.error('User DB migration failed:', err.message);
+});
 
-function readDBSecure() {
-  const db = readDB();
-  const secured = secureAndMigrateDB(db);
-  if (secured.changed) writeDB(secured.db);
-  return secured.db;
+if (IS_VERCEL && !userDb.usePostgres()) {
+  console.warn(
+    'WARNING: DATABASE_URL is not set on Vercel. User accounts are stored in /tmp and will be lost between deployments or cold starts.'
+  );
 }
-
-// Migrate legacy plaintext apiKey fields as server boots.
-readDBSecure();
 
 // ── Auth middleware ────────────────────────────────────────────────────────────
 function auth(req, res, next) {
@@ -139,68 +138,81 @@ app.post('/api/auth/register', async (req, res) => {
   if (password.length < 8)
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
 
-  const db = readDBSecure();
-  if (db.users.find(u => u.email === email.toLowerCase().trim()))
-    return res.status(400).json({ error: 'Email already registered' });
+  try {
+    if (await userDb.findByEmail(email))
+      return res.status(400).json({ error: 'Email already registered' });
 
-  const user = {
-    id:        `u_${Date.now()}`,
-    name:      name.trim(),
-    email:     email.toLowerCase().trim(),
-    password:  await bcrypt.hash(password, 12),
-    apiKeyEnc: '',
-    createdAt: new Date().toISOString()
-  };
-  db.users.push(user);
-  writeDB(db);
+    const user = {
+      id:        `u_${Date.now()}`,
+      name:      name.trim(),
+      email:     email.toLowerCase().trim(),
+      password:  await bcrypt.hash(password, 12),
+      apiKeyEnc: '',
+      createdAt: new Date().toISOString()
+    };
+    await userDb.createUser(user);
 
-  const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+    const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  } catch (err) {
+    console.error('Register failed:', err.message);
+    res.status(500).json({ error: 'Registration failed. Please try again.' });
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-  const db   = readDBSecure();
-  const user = db.users.find(u => u.email === email.toLowerCase().trim());
-  if (!user || !await bcrypt.compare(password, user.password))
-    return res.status(401).json({ error: 'Invalid email or password' });
+  try {
+    const user = await userDb.findByEmail(email);
+    if (!user || !await bcrypt.compare(password, user.password))
+      return res.status(401).json({ error: 'Invalid email or password' });
 
-  const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+    const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  } catch (err) {
+    console.error('Login failed:', err.message);
+    res.status(500).json({ error: 'Login failed. Please try again.' });
+  }
 });
 
 // ── User routes ────────────────────────────────────────────────────────────────
 
-app.get('/api/user/profile', auth, (req, res) => {
-  const db   = readDBSecure();
-  const user = db.users.find(u => u.id === req.user.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  const apiKey = getDecryptedApiKey(user);
-  res.json({
-    id:        user.id,
-    name:      user.name,
-    email:     user.email,
-    hasApiKey: !!apiKey,
-    apiKeyMasked: apiKey
-      ? apiKey.substring(0, 6) + '••••••••' + apiKey.slice(-4)
-      : ''
-  });
+app.get('/api/user/profile', auth, async (req, res) => {
+  try {
+    const user = await userDb.findById(req.user.id);
+    if (!user) return res.status(401).json({ error: 'Account not found. Please sign in again.' });
+    const apiKey = getDecryptedApiKey(user);
+    res.json({
+      id:        user.id,
+      name:      user.name,
+      email:     user.email,
+      hasApiKey: !!apiKey,
+      apiKeyMasked: apiKey
+        ? apiKey.substring(0, 6) + '••••••••' + apiKey.slice(-4)
+        : ''
+    });
+  } catch (err) {
+    console.error('Profile failed:', err.message);
+    res.status(500).json({ error: 'Failed to load profile' });
+  }
 });
 
-app.post('/api/user/apikey', auth, (req, res) => {
+app.post('/api/user/apikey', auth, async (req, res) => {
   const { apiKey } = req.body;
   if (!apiKey?.trim()) return res.status(400).json({ error: 'API key cannot be empty' });
 
-  const db  = readDBSecure();
-  const idx = db.users.findIndex(u => u.id === req.user.id);
-  if (idx === -1) return res.status(404).json({ error: 'User not found' });
+  try {
+    const user = await userDb.findById(req.user.id);
+    if (!user) return res.status(401).json({ error: 'Account not found. Please sign in again.' });
 
-  db.users[idx].apiKeyEnc = encryptValue(apiKey.trim());
-  delete db.users[idx].apiKey;
-  writeDB(db);
-  res.json({ success: true, message: 'API key saved' });
+    await userDb.updateApiKeyEnc(req.user.id, encryptValue(apiKey.trim()));
+    res.json({ success: true, message: 'API key saved' });
+  } catch (err) {
+    console.error('Save API key failed:', err.message);
+    res.status(500).json({ error: 'Failed to save API key' });
+  }
 });
 
 // ── CSV upload ─────────────────────────────────────────────────────────────────
@@ -245,7 +257,7 @@ app.post('/api/upload', auth, upload.single('file'), (req, res) => {
 
 // ── Start processing job ───────────────────────────────────────────────────────
 
-app.post('/api/process', auth, (req, res) => {
+app.post('/api/process', auth, async (req, res) => {
   const { fileId, phoneColumn, rps: rawRps } = req.body;
   if (!fileId || !phoneColumn)
     return res.status(400).json({ error: 'fileId and phoneColumn are required' });
@@ -253,8 +265,13 @@ app.post('/api/process', auth, (req, res) => {
   // Clamp rps to 1–120; default 8 for free-tier safety
   const rps = Math.min(120, Math.max(1, parseInt(rawRps) || 8));
 
-  const db   = readDBSecure();
-  const user = db.users.find(u => u.id === req.user.id);
+  let user;
+  try {
+    user = await userDb.findById(req.user.id);
+  } catch (err) {
+    console.error('Process lookup failed:', err.message);
+    return res.status(500).json({ error: 'Failed to load account' });
+  }
   const apiKey = getDecryptedApiKey(user);
   if (!apiKey)
     return res.status(400).json({ error: 'Please save your NumlookupAPI key first' });
@@ -427,7 +444,9 @@ async function runJob(jobId, records, phoneColumn, apiKey, rps = 8) {
 
 if (!IS_VERCEL) {
   app.listen(PORT, () => {
-    console.log(`\n  PhoneVerify running → http://localhost:${PORT}\n`);
+    const storage = userDb.getStorageMode();
+    console.log(`\n  PhoneVerify running → http://localhost:${PORT}`);
+    console.log(`  User storage: ${storage}${storage === 'file' ? ' (set DATABASE_URL for production)' : ''}\n`);
   });
 }
 
